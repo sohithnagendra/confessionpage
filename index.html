@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ConfessOut - Secret Anonymous Student Confessions</title>
+  <meta name="description" content="Share your deepest college secrets, campus crushes, and exam stories completely anonymously. React to other confessions and view trending topics.">
+  <link rel="stylesheet" href="style.css">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Supabase JS Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="dark-theme">
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- SPA Router Container -->
+  <div id="app">
+    
+    <!-- NAVIGATION BAR -->
+    <header class="app-header" id="main-nav">
+      <div class="nav-container">
+        <a href="#feed" class="brand" id="nav-logo">
+          <svg class="brand-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="10" r="1.5" fill="currentColor"></circle>
+            <circle cx="8" cy="10" r="1.5" fill="currentColor"></circle>
+            <circle cx="16" cy="10" r="1.5" fill="currentColor"></circle>
+          </svg>
+          <span class="brand-text">Confess<span class="brand-accent">Out</span></span>
+        </a>
+        <nav class="nav-links">
+          <button class="nav-link-btn active" id="btn-view-feed" data-target="feed-view">
+            <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            Feed
+          </button>
+          <button class="nav-link-btn" id="btn-view-post" data-target="post-view">
+            <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Post Secret
+          </button>
+
+          <button class="nav-link-btn" id="btn-view-flames" data-target="flames-view">
+            <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+            FLAMES
+          </button>
+          <button class="nav-link-btn" id="btn-view-chat" data-target="chat-view">
+            <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            Message Admin
+          </button>
+          <button class="nav-link-btn moderator-only hidden" id="btn-view-admin" data-target="admin-view">
+            <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            Mod Panel <span class="badge" id="pending-badge">0</span>
+          </button>
+        </nav>
+        <div class="user-status-section">
+          <div id="user-info" class="user-info hidden">
+            <span class="user-avatar" id="nav-user-avatar">M</span>
+            <span class="user-name" id="nav-username">Moderator</span>
+          </div>
+          <button id="btn-logout" class="btn btn-secondary hidden">Logout</button>
+          <button id="btn-login-redirect" class="btn btn-primary">Staff Login</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 1. LOGIN PAGE VIEW -->
+    <main id="login-view" class="view hidden">
+      <div class="login-container">
+        <!-- Left Pane: Interactive SVG Dolls -->
+        <div class="dolls-panel">
+          <div class="dolls-header">
+            <div class="dolls-logo">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="10" r="1" fill="currentColor"></circle>
+                <circle cx="8" cy="10" r="1" fill="currentColor"></circle>
+                <circle cx="16" cy="10" r="1" fill="currentColor"></circle>
+              </svg>
+              <span>ConfessOut</span>
+            </div>
+          </div>
+          
+          <div class="dolls-scene">
+            <svg id="dolls-svg" viewBox="0 0 400 400" width="100%" height="100%" preserveAspectRatio="xMidYMax meet">
+              <!-- Definitions for gradients and shadows -->
+              <defs>
+                <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+                  <feDropShadow dx="0" dy="8" stdDeviation="6" flood-opacity="0.15" />
+                </filter>
+              </defs>
+              
+              <!-- 1. Purple Doll (Back Left) -->
+              <g class="doll-purple" filter="url(#shadow)">
+                <rect x="60" y="130" width="125" height="270" rx="24" fill="#7852ff" />
+                <!-- Eyes -->
+                <g class="eyes">
+                  <g class="eye" id="eye-purple-left">
+                    <circle class="eye-socket" cx="102" cy="195" r="13" fill="#ffffff" />
+                    <circle class="pupil" cx="102" cy="195" r="4.5" fill="#000000" data-max-move="7" />
+                  </g>
+                  <g class="eye" id="eye-purple-right">
+                    <circle class="eye-socket" cx="142" cy="195" r="13" fill="#ffffff" />
+                    <circle class="pupil" cx="142" cy="195" r="4.5" fill="#000000" data-max-move="7" />
+                  </g>
+                </g>
+              </g>
+
+              <!-- 2. Dark Grey Doll (Back Middle Right) -->
+              <g class="doll-grey" filter="url(#shadow)">
+                <rect x="215" y="190" width="90" height="210" rx="18" fill="#2d3436" />
+                <!-- Eyes -->
+                <g class="eyes">
+                  <g class="eye" id="eye-grey-left">
+                    <circle class="eye-socket" cx="242" cy="245" r="9" fill="#ffffff" />
+                    <circle class="pupil" cx="242" cy="245" r="3.5" fill="#000000" data-max-move="4.5" />
+                  </g>
+                  <g class="eye" id="eye-grey-right">
+                    <circle class="eye-socket" cx="272" cy="245" r="9" fill="#ffffff" />
+                    <circle class="pupil" cx="272" cy="245" r="3.5" fill="#000000" data-max-move="4.5" />
+                  </g>
+                </g>
+              </g>
+
+              <!-- 3. Orange Doll (Bottom Left) -->
+              <g class="doll-orange" filter="url(#shadow)">
+                <path d="M 15 400 C 15 230, 205 230, 205 400 Z" fill="#fc9f65" />
+                <!-- Eyes (Directly on body) -->
+                <g class="eyes">
+                  <g class="eye-no-socket" id="eye-orange-left">
+                    <circle class="pupil" cx="95" cy="315" r="4" fill="#000000" data-max-move="4" />
+                  </g>
+                  <g class="eye-no-socket" id="eye-orange-right">
+                    <circle class="pupil" cx="125" cy="315" r="4" fill="#000000" data-max-move="4" />
+                  </g>
+                </g>
+              </g>
+
+              <!-- 4. Yellow Doll (Bottom Right) -->
+              <g class="doll-yellow" filter="url(#shadow)">
+                <path d="M 195 400 C 195 240, 345 240, 345 400 Z" fill="#fed330" />
+                <!-- Eyes (Directly on body) -->
+                <g class="eyes">
+                  <g class="eye-no-socket" id="eye-yellow-left">
+                    <circle class="pupil" cx="255" cy="305" r="3.8" fill="#000000" data-max-move="4" />
+                  </g>
+                  <g class="eye-no-socket" id="eye-yellow-right">
+                    <circle class="pupil" cx="285" cy="305" r="3.8" fill="#000000" data-max-move="4" />
+                  </g>
+                </g>
+                <!-- Mouth line -->
+                <line x1="250" y1="340" x2="290" y2="340" stroke="#000000" stroke-width="4" stroke-linecap="round" />
+              </g>
+            </svg>
+          </div>
+          
+          <div class="dolls-footer">
+            <span>ConfessOut © 2026</span>
+          </div>
+        </div>
+
+        <!-- Right Pane: Login Form -->
+         <div class="form-panel">
+          <div class="form-header">
+            <h1 class="form-title">Staff Portal</h1>
+            <p class="form-subtitle">Enter your password to access the moderation dashboard</p>
+          </div>
+
+          <form id="login-form" class="login-form">
+            <div id="login-error" class="form-error-msg"></div>
+
+            <div class="form-group">
+              <label for="login-password">Staff Password</label>
+              <div class="password-input-wrapper">
+                <input type="password" id="login-password" placeholder="Enter password..." autocomplete="current-password" required>
+                <button type="button" id="toggle-password" class="toggle-password-btn" aria-label="Toggle password visibility">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem;">Unlock Dashboard</button>
+          </form>
+
+          <div class="form-footer">
+            <p>Not a staff member? <a href="#" id="link-go-to-feed">Go back to the main site</a></p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 2. PUBLIC FEED VIEW -->
+    <main id="feed-view" class="view">
+      <div class="feed-layout">
+        <!-- Left Sidebar: Filters and Generator -->
+        <aside class="feed-sidebar">
+          
+          <!-- Search & Filter Card -->
+          <div class="sidebar-card">
+            <h3>Search Secrets</h3>
+            <div class="search-wrapper">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="feed-search" placeholder="Type keyword...">
+            </div>
+            
+            <h3 class="margin-top-md">Filter by Category</h3>
+            <div class="tags-filter-list" id="tags-filter-container">
+              <button class="tag-filter-btn active" data-tag="all">All</button>
+              <button class="tag-filter-btn" data-tag="funny">Funny</button>
+              <button class="tag-filter-btn" data-tag="love">Love</button>
+              <button class="tag-filter-btn" data-tag="crush">Crush</button>
+              <button class="tag-filter-btn" data-tag="academic">Academic</button>
+              <button class="tag-filter-btn" data-tag="wholesome">Wholesome</button>
+              <button class="tag-filter-btn" data-tag="general">General</button>
+            </div>
+          </div>
+
+
+          <!-- Statistics Widget -->
+          <div class="sidebar-card">
+            <h3>Campus Buzz</h3>
+            <div class="buzz-stats">
+              <div class="buzz-stat-item">
+                <span class="buzz-num" id="stat-total-secrets">1,248</span>
+                <span class="buzz-lbl">Confessions</span>
+              </div>
+              <div class="buzz-stat-item">
+                <span class="buzz-num" id="stat-active-readers">432</span>
+                <span class="buzz-lbl">Online Now</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Right Side: Main Confessions Feed -->
+        <section class="feed-content">
+          <!-- Banner / Top Controls -->
+          <div class="feed-header-panel">
+            <div>
+              <h2 class="view-title">Student Whispers</h2>
+              <p class="view-subtitle">Read what students are whispering anonymously</p>
+            </div>
+            <div class="feed-sort-controls">
+              <button class="sort-btn active" id="sort-latest" data-sort="latest">
+                Latest
+              </button>
+              <button class="sort-btn" id="sort-trending" data-sort="trending">
+                🔥 Trending
+              </button>
+            </div>
+          </div>
+
+          <!-- Write Secret Preview Banner -->
+          <div class="quick-post-banner" id="trigger-post-banner">
+            <span class="banner-avatar">🤫</span>
+            <div class="banner-prompt">
+              <h4>Got a secret you want to get off your chest?</h4>
+              <p>It's 100% anonymous, safe, and filtered.</p>
+            </div>
+            <button class="btn btn-primary btn-sm">Write Confession</button>
+          </div>
+
+          <!-- Confessions List Container -->
+          <div class="confessions-list" id="confessions-list-container">
+            <!-- Dynamically populated via main.js -->
+          </div>
+
+          <!-- Loading state placeholder -->
+          <div id="feed-empty-state" class="empty-state hidden">
+            <span class="empty-state-icon">📭</span>
+            <h3>No confessions found</h3>
+            <p>Try changing your search parameters, tag filters, or write the very first confession!</p>
+            <button class="btn btn-primary" id="btn-empty-write">Write Secret</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- 3. POST CONFESSION VIEW -->
+    <main id="post-view" class="view hidden">
+      <div class="post-layout-container">
+        <div class="post-card-wrapper">
+          <div class="post-card-header">
+            <h2>Whisper Anonymously</h2>
+            <p>Your IP address is NOT logged. Your identity will never be revealed.</p>
+          </div>
+
+          <form id="post-secret-form" class="post-secret-form">
+            <div class="form-group">
+              <label for="confession-text">Your Confession</label>
+              <div class="textarea-wrapper">
+                <textarea id="confession-text" rows="6" maxlength="300" placeholder="Type your secret confession here..."></textarea>
+                <div class="textarea-footer">
+                  <span class="char-counter"><span id="char-count">0</span> / 300</span>
+                  <button type="button" id="btn-fill-random" class="btn-text">
+                    🎲 Generate random secret
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Select Category Tag</label>
+              <div class="tag-selector-grid">
+                <label class="tag-radio">
+                  <input type="radio" name="confession-tag" value="Funny" checked>
+                  <span class="radio-label">Funny</span>
+                </label>
+                <label class="tag-radio">
+                  <input type="radio" name="confession-tag" value="Love">
+                  <span class="radio-label">Love</span>
+                </label>
+                <label class="tag-radio">
+                  <input type="radio" name="confession-tag" value="Crush">
+                  <span class="radio-label">Crush</span>
+                </label>
+                <label class="tag-radio">
+                  <input type="radio" name="confession-tag" value="Academic">
+                  <span class="radio-label">Academic</span>
+                </label>
+                <label class="tag-radio">
+                  <input type="radio" name="confession-tag" value="Wholesome">
+                  <span class="radio-label">Wholesome</span>
+                </label>
+                <label class="tag-radio">
+                  <input type="radio" name="confession-tag" value="General">
+                  <span class="radio-label">General</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="post-actions">
+              <button type="button" class="btn btn-secondary" id="btn-post-cancel">Cancel</button>
+              <button type="submit" class="btn btn-gradient">Post Confession</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+
+
+    <!-- 4.5 FLAMES CALCULATOR VIEW -->
+    <main id="flames-view" class="view hidden">
+      <div class="flames-layout">
+        <div class="flames-orb-1"></div>
+        <div class="flames-orb-2"></div>
+        
+        <div class="flames-container-box">
+          <div class="flames-header">
+            <span class="flames-badge">CLASSIC SCHOOL GAME</span>
+            <h2>❤️ FLAMES Calculator</h2>
+            <p>Discover the destiny between you and your crush</p>
+          </div>
+
+          <form id="flames-form" class="flames-form">
+            <div class="flames-input-grid">
+              <div class="form-group">
+                <label for="flames-name-1">Your Name</label>
+                <input type="text" id="flames-name-1" placeholder="Enter your name" required autocomplete="off">
+              </div>
+              <div class="flames-vs-node">VS</div>
+              <div class="form-group">
+                <label for="flames-name-2">Crush's Name</label>
+                <input type="text" id="flames-name-2" placeholder="Enter their name" required autocomplete="off">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-gradient btn-lg btn-glow btn-block" style="margin-top: 1rem;">
+              Calculate FLAMES
+            </button>
+          </form>
+
+          <!-- Animation Board -->
+          <div class="flames-board hidden" id="flames-board">
+            <div class="flames-letters-row">
+              <div class="flames-letter" data-letter="F">
+                <span class="letter-char">F</span>
+                <span class="letter-label">Friendship</span>
+              </div>
+              <div class="flames-letter" data-letter="L">
+                <span class="letter-char">L</span>
+                <span class="letter-label">Love</span>
+              </div>
+              <div class="flames-letter" data-letter="A">
+                <span class="letter-char">A</span>
+                <span class="letter-label">Affection</span>
+              </div>
+              <div class="flames-letter" data-letter="M">
+                <span class="letter-char">M</span>
+                <span class="letter-label">Marriage</span>
+              </div>
+              <div class="flames-letter" data-letter="E">
+                <span class="letter-char">E</span>
+                <span class="letter-label">Enemy</span>
+              </div>
+              <div class="flames-letter" data-letter="S">
+                <span class="letter-char">S</span>
+                <span class="letter-label">Siblings</span>
+              </div>
+            </div>
+            
+            <div class="flames-status-text" id="flames-status">Eliminating common letters...</div>
+          </div>
+
+          <!-- Result Box -->
+          <div class="flames-result-box hidden" id="flames-result-box">
+            <!-- Dynamically populated via main.js -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 4.8 SUPPORT CHAT VIEW -->
+    <main id="chat-view" class="view hidden">
+      <div class="chat-layout-container">
+        <div class="chat-card-wrapper">
+          <div class="chat-card-header">
+            <div class="chat-header-info">
+              <div class="chat-status-indicator">
+                <span class="status-dot pulsing"></span>
+                <span class="status-text">Connect with Admins</span>
+              </div>
+              <h2>Mod Connect Support</h2>
+              <p>Chat anonymously with the college moderation team</p>
+            </div>
+            <div class="chat-user-alias-badge" id="chat-user-alias">
+              Alias: Checking...
+            </div>
+          </div>
+
+          <div class="chat-messages-container" id="chat-messages-box">
+            <!-- Messages bubbles will go here -->
+          </div>
+
+          <form id="chat-send-form" class="chat-send-form">
+            <input type="text" id="chat-message-input" placeholder="Type a message to the admin..." required autocomplete="off" maxlength="400">
+            <button type="submit" class="btn btn-gradient btn-send" title="Send message">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </form>
+        </div>
+      </div>
+    </main>
+
+    <!-- 5. MODERATOR ADMIN PANEL VIEW -->
+    <main id="admin-view" class="view hidden">
+      <div class="admin-layout">
+        <!-- Top Statistics Row -->
+        <section class="admin-stats-row">
+          <div class="admin-stat-card">
+            <h4>Pending Reviews</h4>
+            <p class="stat-value text-warning" id="admin-count-pending">0</p>
+            <div class="stat-indicator indicator-warning">Needs Approval</div>
+          </div>
+          <div class="admin-stat-card">
+            <h4>Total Approved</h4>
+            <p class="stat-value text-success" id="admin-count-approved">0</p>
+            <div class="stat-indicator indicator-success">Active on Feed</div>
+          </div>
+          <div class="admin-stat-card">
+            <h4>Total Discarded</h4>
+            <p class="stat-value text-danger" id="admin-count-rejected">0</p>
+            <div class="stat-indicator indicator-danger">Violated Policies</div>
+          </div>
+        </section>
+
+        <!-- Moderation Queue -->
+        <section class="admin-queue-section">
+          <div class="queue-header">
+            <div>
+              <h3>Moderation Queue</h3>
+              <p>Review incoming messages before they go live on the public feed</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-admin-refresh">Refresh Queue</button>
+          </div>
+
+          <div class="queue-list" id="admin-queue-list">
+            <!-- Dynamic elements via main.js -->
+          </div>
+
+          <div id="admin-empty-queue" class="admin-empty-queue hidden">
+            <span class="success-icon">🎉</span>
+            <h3>Inbox is clean!</h3>
+            <p>There are no pending confessions to moderate at this time.</p>
+          </div>
+        </section>
+
+        <!-- Support Chats Section -->
+        <section class="admin-queue-section margin-top-md">
+          <div class="queue-header">
+            <div>
+              <h3>Support Conversations</h3>
+              <p>Read and reply to direct messages sent by anonymous visitors</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-admin-chats-refresh">Refresh Chats</button>
+          </div>
+
+          <div class="admin-chats-split-layout">
+            <!-- Left Pane: Active threads list -->
+            <div class="admin-chats-threads-list" id="admin-chats-threads">
+              <!-- Dynamically populated threads -->
+            </div>
+
+            <!-- Right Pane: Active Chat window -->
+            <div class="admin-chats-window" id="admin-chats-window-container">
+              <div class="chat-window-placeholder" id="admin-chat-placeholder">
+                <div class="placeholder-icon">💬</div>
+                <h4>No Conversation Selected</h4>
+                <p>Click on any anonymous visitor thread on the left to view the messages and reply.</p>
+              </div>
+
+              <div class="chat-window-active hidden" id="admin-chat-active-box">
+                <div class="active-chat-header">
+                  <div class="active-chat-user-info">
+                    <span class="active-chat-avatar" id="active-thread-avatar">🦊</span>
+                    <div>
+                      <h4 id="active-thread-title">Anon Fox</h4>
+                      <span id="active-thread-session" class="session-span-id">Session: chat_sess_...</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="active-chat-messages" id="admin-chat-messages-box">
+                  <!-- Messages for the selected session -->
+                </div>
+
+                <form id="admin-chat-reply-form" class="active-chat-reply-form">
+                  <input type="text" id="admin-chat-reply-input" placeholder="Type your response as a Moderator..." required autocomplete="off">
+                  <button type="submit" class="btn btn-primary">Send Reply</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Staff Settings Section -->
+        <section class="admin-queue-section margin-top-md">
+          <div class="queue-header">
+            <div>
+              <h3>System & Moderation Policies</h3>
+              <p>Configure passwords and auto-moderation rules</p>
+            </div>
+          </div>
+          <form id="settings-passwords-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="settings-admin-password">Administrator Password</label>
+              <input type="password" id="settings-admin-password" placeholder="New admin password">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="settings-mod-password">Moderator Password</label>
+              <input type="password" id="settings-mod-password" placeholder="New moderator password">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="settings-report-limit">Auto-Hide Report Threshold</label>
+              <input type="number" id="settings-report-limit" min="1" max="100" placeholder="Default: 5">
+            </div>
+            <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+              <button type="submit" class="btn btn-primary">Save Settings</button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Supabase Connection Section -->
+        <section class="admin-queue-section margin-top-md">
+          <div class="queue-header">
+            <div>
+              <h3>Supabase Cloud Database Settings</h3>
+              <p>Connect your app to a live shared database so friends can post from their own devices</p>
+            </div>
+            <span class="badge" id="db-status-badge">Local Mode</span>
+          </div>
+          <form id="settings-supabase-form" style="display: grid; grid-template-columns: 1fr; gap: 1.2rem;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="settings-db-url">Supabase API URL</label>
+              <input type="url" id="settings-db-url" placeholder="https://your-project.supabase.co">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="settings-db-key">Supabase Public Anon Key</label>
+              <input type="password" id="settings-db-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 0.5rem;">
+              <button type="button" id="btn-db-disconnect" class="btn btn-secondary hidden">Disconnect</button>
+              <button type="submit" class="btn btn-gradient">Connect & Sync</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Entry Script -->
+  <script type="module" src="main.js"></script>
+</body>
+</html>
