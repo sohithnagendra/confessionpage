@@ -371,8 +371,8 @@ export function hasUserReported(id) {
 
 // Password management in localStorage/Supabase
 export async function getPasswords() {
-  let adminPass = 'pass@123';
-  let modPass = 'pass@123';
+  let adminPass = localStorage.getItem('confess_admin_pass') || 'pass@123';
+  let modPass = localStorage.getItem('confess_mod_pass') || 'pass@123';
   
   if (supabase) {
     try {
@@ -396,12 +396,14 @@ export async function getPasswords() {
 
         if (adminRow) {
           adminPass = adminRow.value;
+          localStorage.setItem('confess_admin_pass', adminPass);
         } else if (localAdmin && localAdmin !== 'pass@123') {
           needSync = true;
         }
 
         if (modRow) {
           modPass = modRow.value;
+          localStorage.setItem('confess_mod_pass', modPass);
         } else if (localMod && localMod !== 'pass@123') {
           needSync = true;
         }
@@ -425,8 +427,8 @@ export async function getPasswords() {
   }
   
   return {
-    admin: localStorage.getItem('confess_admin_pass') || adminPass,
-    moderator: localStorage.getItem('confess_mod_pass') || modPass
+    admin: adminPass,
+    moderator: modPass
   };
 }
 
@@ -471,7 +473,9 @@ export async function savePasswords(adminPass, modPass) {
 
 // Fetch auto-hide report limit configuration
 export async function getReportThreshold() {
-  let limit = 5;
+  let limit = parseInt(localStorage.getItem('confess_report_threshold')) || 5;
+  if (isNaN(limit)) limit = 5;
+  
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -495,17 +499,16 @@ export async function getReportThreshold() {
         }
       } else if (data) {
         const val = parseInt(data.value);
-        if (!isNaN(val)) limit = val;
+        if (!isNaN(val)) {
+          limit = val;
+          localStorage.setItem('confess_report_threshold', limit.toString());
+        }
       }
     } catch (e) {
       console.error('Error fetching report threshold from Supabase:', e);
     }
   }
   
-  const localVal = parseInt(localStorage.getItem('confess_report_threshold'));
-  if (!isNaN(localVal)) {
-    return localVal;
-  }
   return limit;
 }
 
