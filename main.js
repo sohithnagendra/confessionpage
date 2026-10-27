@@ -227,16 +227,26 @@ async function renderConfessionsFeed() {
   const user = getCurrentUser();
   const isStaff = user && user.isLoggedIn && (user.role === 'admin' || user.role === 'moderator');
 
+  // SECURITY: Allowed tags whitelist (must match data.js ALLOWED_TAGS)
+  const ALLOWED_TAGS = ['Funny', 'Love', 'Crush', 'Academic', 'Wholesome', 'General'];
+
+  // SECURITY: Safe tag rendering - validates against whitelist
+  function getSafeTag(tag) {
+    const safeTag = ALLOWED_TAGS.find(t => t.toLowerCase() === tag.toLowerCase());
+    return safeTag || 'General';
+  }
+
   // Build items html
   container.innerHTML = posts.map(post => {
     const timeString = formatTimeAgo(post.timestamp);
     const activeReaction = getUserReaction(post.id);
     const hasReported = hasUserReported(post.id);
-    
+    const safeTag = getSafeTag(post.tag);
+
     return `
       <div class="confession-card" data-id="${post.id}">
         <div class="card-header">
-          <span class="card-tag tag-${post.tag.toLowerCase()}">${post.tag}</span>
+          <span class="card-tag tag-${safeTag.toLowerCase()}">${escapeHtml(safeTag)}</span>
           <div class="card-header-actions">
             <span class="card-time">${timeString}</span>
             ${isStaff ? `
@@ -412,10 +422,11 @@ async function renderAdminQueue() {
   // Populate list
   container.innerHTML = pending.map(post => {
     const timeString = new Date(post.timestamp).toLocaleString();
+    const safeTag = getSafeTag(post.tag);
     return `
       <div class="admin-queue-card" data-id="${post.id}">
         <div class="queue-card-meta">
-          <span class="card-tag tag-${post.tag.toLowerCase()}">${post.tag}</span>
+          <span class="card-tag tag-${safeTag.toLowerCase()}">${escapeHtml(safeTag)}</span>
           <span class="queue-card-time">${timeString}</span>
           ${post.reports > 0 ? `<span class="report-badge">${post.reports} Reports</span>` : ''}
         </div>

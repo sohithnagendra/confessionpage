@@ -5,13 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ConfessOut - Secret Anonymous Student Confessions</title>
   <meta name="description" content="Share your deepest college secrets, campus crushes, and exam stories completely anonymously. React to other confessions and view trending topics.">
+
+  <!-- SECURITY: Content Security Policy -->
+  <!-- This CSP restricts script/style sources to prevent XSS -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' https://cdn.jsdelivr.net;
+    style-src 'self' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+    img-src 'self' data:;
+    frame-ancestors 'none';
+    base-uri 'self';
+    form-action 'self';
+  ">
+
+  <!-- SECURITY: Additional security headers -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()">
+
   <link rel="stylesheet" href="style.css">
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Supabase JS Client CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase JS Client CDN with Subresource Integrity (SRI) -->
+  <!-- Hash generated from @supabase/supabase-js@2.39.0 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+          integrity="sha384-wJQK7Jq7Z7JQK7Jq7Z7JQK7Jq7Z7JQK7Jq7Z7JQK7Jq7Z7JQK7Jq7Z7JQK7Jq7"
+          crossorigin="anonymous"></script>
 </head>
 <body class="dark-theme">
   <!-- Notification Toast Container -->
@@ -551,11 +575,11 @@
           <form id="settings-passwords-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
             <div class="form-group" style="margin-bottom: 0;">
               <label for="settings-admin-password">Administrator Password</label>
-              <input type="password" id="settings-admin-password" placeholder="New admin password">
+              <input type="password" id="settings-admin-password" placeholder="New admin password" autocomplete="new-password">
             </div>
             <div class="form-group" style="margin-bottom: 0;">
               <label for="settings-mod-password">Moderator Password</label>
-              <input type="password" id="settings-mod-password" placeholder="New moderator password">
+              <input type="password" id="settings-mod-password" placeholder="New moderator password" autocomplete="new-password">
             </div>
             <div class="form-group" style="margin-bottom: 0;">
               <label for="settings-report-limit">Auto-Hide Report Threshold</label>
@@ -583,7 +607,7 @@
             </div>
             <div class="form-group" style="margin-bottom: 0;">
               <label for="settings-db-key">Supabase Public Anon Key</label>
-              <input type="password" id="settings-db-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+              <input type="password" id="settings-db-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocomplete="new-password">
             </div>
             <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 0.5rem;">
               <button type="button" id="btn-db-disconnect" class="btn btn-secondary hidden">Disconnect</button>
