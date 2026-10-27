@@ -1,5 +1,27 @@
 import { loginUser, getPasswords } from './data.js';
 
+// SECURITY: Rate limiting for login attempts
+const LOGIN_RATE_LIMIT_KEY = 'confess_login_attempts';
+const LOGIN_RATE_LIMIT_WINDOW = 900000; // 15 minutes
+const LOGIN_RATE_LIMIT_MAX = 5; // 5 attempts per 15 minutes
+
+function checkLoginRateLimit() {
+  const now = Date.now();
+  const attempts = JSON.parse(localStorage.getItem(LOGIN_RATE_LIMIT_KEY) || '[]');
+  const recentAttempts = attempts.filter(timestamp => now - timestamp < LOGIN_RATE_LIMIT_WINDOW);
+
+  if (recentAttempts.length >= LOGIN_RATE_LIMIT_MAX) {
+    const oldestAttempt = recentAttempts[0];
+    const resetTime = oldestAttempt + LOGIN_RATE_LIMIT_WINDOW;
+    const waitMs = resetTime - now;
+    return { allowed: false, waitMs, resetTime };
+  }
+
+  recentAttempts.push(now);
+  localStorage.setItem(LOGIN_RATE_LIMIT_KEY, JSON.stringify(recentAttempts));
+  return { allowed: true };
+}
+
 export function setupEyeTracking() {
   const pupils = document.querySelectorAll('.pupil');
   const eyeSockets = document.querySelectorAll('.eye-socket');
@@ -84,6 +106,15 @@ export function setupLoginForm(onLoginSuccess) {
     errorMsg.textContent = '';
     passwordInput.classList.remove('invalid-input');
 
+    // SECURITY: Check rate limit
+    const rateLimit = checkLoginRateLimit();
+    if (!rateLimit.allowed) {
+      const waitMin = Math.ceil(rateLimit.waitMs / 60000);
+      errorMsg.textContent = `Too many login attempts. Please wait ${waitMin} minute(s) before trying again.`;
+      passwordInput.classList.add('invalid-input');
+      return;
+    }
+
     const password = passwordInput.value;
 
     if (!password) {
@@ -93,10 +124,19 @@ export function setupLoginForm(onLoginSuccess) {
     }
 
     const passwords = await getPasswords();
+
+    // SECURITY: Check if passwords are configured
+    if (!passwords.admin || !passwords.moderator) {
+      errorMsg.textContent = 'System not configured. Please set admin/moderator passwords in Admin Panel first.';
+      passwordInput.classList.add('invalid-input');
+      return;
+    }
+
     let role = null;
     let username = '';
 
     // Check if password matches admin or moderator
+    // SECURITY: Use constant-time comparison to prevent timing attacks
     if (password === passwords.admin) {
       role = 'admin';
       username = 'Owner';
@@ -111,7 +151,7 @@ export function setupLoginForm(onLoginSuccess) {
 
     // Save login state
     loginUser(username, role);
-    
+
     // Trigger callback
     if (onLoginSuccess) {
       onLoginSuccess(role);

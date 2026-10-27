@@ -7,6 +7,83 @@ const STORAGE_KEYS = {
 // Seed/Mock Data is empty initially for real user experience
 const SEED_CONFESSIONS = [];
 
+// SECURITY: Allowed tags whitelist - prevents XSS via tag injection
+const ALLOWED_TAGS = ['Funny', 'Love', 'Crush', 'Academic', 'Wholesome', 'General'];
+
+// SECURITY: Maximum confession length
+const MAX_CONFESSION_LENGTH = 300;
+
+// SECURITY: Minimum confession length
+const MIN_CONFESSION_LENGTH = 15;
+
+// SECURITY: Rate limiting storage keys
+const RATE_LIMIT_KEYS = {
+  SUBMIT: 'confess_rate_submit',
+  REACT: 'confess_rate_react',
+  REPORT: 'confess_rate_report',
+  CHAT: 'confess_rate_chat',
+  LOGIN: 'confess_rate_login'
+};
+
+// SECURITY: Rate limit windows (ms) and max requests
+const RATE_LIMITS = {
+  SUBMIT: { window: 60000, max: 3 },      // 3 confessions per minute
+  REACT: { window: 10000, max: 10 },      // 10 reactions per 10 seconds
+  REPORT: { window: 300000, max: 5 },     // 5 reports per 5 minutes
+  CHAT: { window: 10000, max: 5 },        // 5 messages per 10 seconds
+  LOGIN: { window: 900000, max: 5 }       // 5 login attempts per 15 minutes
+};
+
+// SECURITY: Rate limiting helper
+function checkRateLimit(key, limitConfig) {
+  const now = Date.now();
+  const storageKey = RATE_LIMIT_KEYS[key];
+  const attempts = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  const recentAttempts = attempts.filter(timestamp => now - timestamp < limitConfig.window);
+
+  if (recentAttempts.length >= limitConfig.max) {
+    const oldestAttempt = recentAttempts[0];
+    const resetTime = oldestAttempt + limitConfig.window;
+    const waitMs = resetTime - now;
+    return { allowed: false, waitMs, resetTime };
+  }
+
+  recentAttempts.push(now);
+  localStorage.setItem(storageKey, JSON.stringify(recentAttempts));
+  return { allowed: true };
+}
+
+// SECURITY: Validate tag against whitelist
+function validateTag(tag) {
+  return ALLOWED_TAGS.includes(tag);
+}
+
+// SECURITY: Validate confession text
+function validateConfessionText(text) {
+  if (!text || typeof text !== 'string') return { valid: false, error: 'Invalid input' };
+  const trimmed = text.trim();
+  if (trimmed.length < MIN_CONFESSION_LENGTH) {
+    return { valid: false, error: `Confessions must be at least ${MIN_CONFESSION_LENGTH} characters long.` };
+  }
+  if (trimmed.length > MAX_CONFESSION_LENGTH) {
+    return { valid: false, error: `Confessions cannot exceed ${MAX_CONFESSION_LENGTH} characters.` };
+  }
+  // Check for suspicious patterns (basic XSS/Injection prevention)
+  const suspiciousPatterns = [
+    /<script/i,
+    /javascript:/i,
+    /on\w+\s*=/i,
+    /data:/i,
+    /vbscript:/i
+  ];
+  for (const pattern of suspiciousPatterns) {
+    if (pattern.test(trimmed)) {
+      return { valid: false, error: 'Confession contains invalid content.' };
+    }
+  }
+  return { valid: true, text: trimmed };
+}
+
 const RANDOM_STARTERS = [
   "Study Hack: The computer lab on the 3rd floor of the engineering building is completely empty after 6 PM. The chairs are super comfortable and the Wi-Fi is twice as fast as the library.",
   "Food Hack: The cafeteria staff will give you double portions of fries on Fridays if you simply ask how their week is going. Small kindness gets you fed!",
@@ -18,10 +95,11 @@ const RANDOM_STARTERS = [
   "Coffee Hack: The Career center lobby has a free Keurig coffee machine that is open to any student who pretends to browse resume templates or internship flyers."
 ];
 
-// Hardcode your Supabase credentials here so they are active for ALL visitors (friends, etc.)
-// Leave empty if you want to use the Admin Panel settings instead.
-const SUPABASE_URL = "https://syppynfobjhgfafzcolo.supabase.co"; 
-const SUPABASE_ANON_KEY = "sb_publishable_3mpFRQNyq6TUQClw3l0XdQ_-d2gXXZ0";
+// SECURITY: Supabase credentials must be configured via Admin Panel only
+// NEVER hardcode credentials in source code - they are committed to git history
+// Configure via Admin Panel > Supabase Cloud Database Settings
+const SUPABASE_URL = "";
+const SUPABASE_ANON_KEY = "";
 
 // Initialize Supabase
 let supabase = null;
@@ -93,11 +171,29 @@ function saveAllConfessions(confessions) {
 
 // Submit a new confession
 export async function submitConfession(text, tag) {
+  // SECURITY: Validate input
+  const validation = validateConfessionText(text);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+
+  // SECURITY: Validate tag against whitelist
   const formattedTag = tag || 'General';
+  if (!validateTag(formattedTag)) {
+    throw new Error('Invalid tag selected');
+  }
+
+  // SECURITY: Rate limiting
+  const rateLimit = checkRateLimit('SUBMIT', RATE_LIMITS.SUBMIT);
+  if (!rateLimit.allowed) {
+    const waitSec = Math.ceil(rateLimit.waitMs / 1000);
+    throw new Error(`Rate limit exceeded. Please wait ${waitSec} seconds before submitting another confession.`);
+  }
+
   if (supabase) {
     try {
       const newRow = {
-        text: text.trim(),
+        text: validation.text,
         tag: formattedTag,
         status: 'pending',
         reports: 0,
@@ -121,7 +217,7 @@ export async function submitConfession(text, tag) {
     const confessions = await getAllConfessions();
     const newConfession = {
       id: 'c_' + Math.random().toString(36).substr(2, 9),
-      text: text.trim(),
+      text: validation.text,
       tag: formattedTag,
       timestamp: Date.now(),
       status: 'pending',
@@ -136,9 +232,22 @@ export async function submitConfession(text, tag) {
 
 // React to a confession (supports toggle/switch to prevent double reacting)
 export async function reactToConfession(id, reactionType) {
+  // SECURITY: Validate reaction type
+  const validReactions = ['love', 'fire', 'haha', 'cry', 'shocked'];
+  if (!validReactions.includes(reactionType)) {
+    throw new Error('Invalid reaction type');
+  }
+
+  // SECURITY: Rate limiting
+  const rateLimit = checkRateLimit('REACT', RATE_LIMITS.REACT);
+  if (!rateLimit.allowed) {
+    const waitSec = Math.ceil(rateLimit.waitMs / 1000);
+    throw new Error(`Rate limit exceeded. Please wait ${waitSec} seconds before reacting again.`);
+  }
+
   const myReactions = JSON.parse(localStorage.getItem('confess_my_reactions') || '{}');
   const oldReaction = myReactions[id];
-  
+
   if (supabase) {
     try {
       const { data: row, error: fetchErr } = await supabase
@@ -147,9 +256,9 @@ export async function reactToConfession(id, reactionType) {
         .eq('id', id)
         .single();
       if (fetchErr || !row) throw fetchErr || new Error("Row not found");
-      
+
       const updates = {};
-      
+
       if (oldReaction === reactionType) {
         // Toggle off active reaction
         const dbColName = `react_${reactionType}`;
@@ -168,14 +277,14 @@ export async function reactToConfession(id, reactionType) {
         updates[dbColName] = (row[dbColName] || 0) + 1;
         myReactions[id] = reactionType;
       }
-      
+
       const { data: updatedData, error: updateErr } = await supabase
         .from('confessions')
         .update(updates)
         .eq('id', id)
         .select();
       if (updateErr || !updatedData) throw updateErr;
-      
+
       localStorage.setItem('confess_my_reactions', JSON.stringify(myReactions));
       return mapPost(updatedData[0]);
     } catch (e) {
@@ -187,7 +296,7 @@ export async function reactToConfession(id, reactionType) {
     const index = confessions.findIndex(c => c.id === id);
     if (index !== -1) {
       const reactions = confessions[index].reactions;
-      
+
       if (oldReaction === reactionType) {
         reactions[reactionType] = Math.max(0, (reactions[reactionType] || 0) - 1);
         delete myReactions[id];
@@ -199,7 +308,7 @@ export async function reactToConfession(id, reactionType) {
         reactions[reactionType] = (reactions[reactionType] || 0) + 1;
         myReactions[id] = reactionType;
       }
-      
+
       saveAllConfessions(confessions);
       localStorage.setItem('confess_my_reactions', JSON.stringify(myReactions));
       return confessions[index];
@@ -210,11 +319,18 @@ export async function reactToConfession(id, reactionType) {
 
 // Report a confession (tracks reports on device to prevent spamming)
 export async function reportConfession(id) {
+  // SECURITY: Rate limiting
+  const rateLimit = checkRateLimit('REPORT', RATE_LIMITS.REPORT);
+  if (!rateLimit.allowed) {
+    const waitSec = Math.ceil(rateLimit.waitMs / 1000);
+    throw new Error(`Rate limit exceeded. Please wait ${waitSec} seconds before reporting again.`);
+  }
+
   const myReports = JSON.parse(localStorage.getItem('confess_my_reports') || '[]');
   if (myReports.includes(id)) {
     return null;
   }
-  
+
   const limit = await getReportThreshold();
   if (supabase) {
     try {
@@ -224,20 +340,20 @@ export async function reportConfession(id) {
         .eq('id', id)
         .single();
       if (fetchErr || !row) throw fetchErr;
-      
+
       const newReports = (row.reports || 0) + 1;
       const updates = { reports: newReports };
       if (newReports >= limit) {
         updates.status = 'pending';
       }
-      
+
       const { data: updatedData, error: updateErr } = await supabase
         .from('confessions')
         .update(updates)
         .eq('id', id)
         .select();
       if (updateErr || !updatedData) throw updateErr;
-      
+
       myReports.push(id);
       localStorage.setItem('confess_my_reports', JSON.stringify(myReports));
       return mapPost(updatedData[0]);
@@ -254,7 +370,7 @@ export async function reportConfession(id) {
         confessions[index].status = 'pending';
       }
       saveAllConfessions(confessions);
-      
+
       myReports.push(id);
       localStorage.setItem('confess_my_reports', JSON.stringify(myReports));
       return confessions[index];
@@ -370,10 +486,18 @@ export function hasUserReported(id) {
 }
 
 // Password management in localStorage/Supabase
+// SECURITY: No default passwords - must be configured via Admin Panel on first run
+// Passwords should be hashed server-side (bcrypt/argon2) - this is a client-side fallback only
 export async function getPasswords() {
-  let adminPass = 'pass@123';
-  let modPass = 'pass@123';
-  
+  let adminPass = localStorage.getItem('confess_admin_pass');
+  let modPass = localStorage.getItem('confess_mod_pass');
+
+  // SECURITY: No default passwords - return null if not configured
+  // This forces admin setup on first run
+  if (!adminPass || !modPass) {
+    console.warn('SECURITY: Admin/moderator passwords not configured. Please set them in Admin Panel.');
+  }
+
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -389,20 +513,22 @@ export async function getPasswords() {
       } else if (data) {
         const adminRow = data.find(r => r.key === 'admin_password');
         const modRow = data.find(r => r.key === 'moderator_password');
-        
+
         let needSync = false;
         const localAdmin = localStorage.getItem('confess_admin_pass');
         const localMod = localStorage.getItem('confess_mod_pass');
 
         if (adminRow) {
           adminPass = adminRow.value;
-        } else if (localAdmin && localAdmin !== 'pass@123') {
+          localStorage.setItem('confess_admin_pass', adminPass);
+        } else if (localAdmin) {
           needSync = true;
         }
 
         if (modRow) {
           modPass = modRow.value;
-        } else if (localMod && localMod !== 'pass@123') {
+          localStorage.setItem('confess_mod_pass', modPass);
+        } else if (localMod) {
           needSync = true;
         }
 
@@ -423,55 +549,45 @@ export async function getPasswords() {
       console.error('Error fetching passwords from Supabase:', e);
     }
   }
-  
+
   return {
-    admin: localStorage.getItem('confess_admin_pass') || adminPass,
-    moderator: localStorage.getItem('confess_mod_pass') || modPass
+    admin: adminPass || null,
+    moderator: modPass || null
   };
 }
 
 export async function savePasswords(adminPass, modPass) {
+  // SECURITY: Passwords should be managed via Supabase Auth (server-side hashed)
+  // This localStorage-only fallback is for demo/local mode only
+  // The new RLS policies prevent public write to password keys in Supabase
+
   if (adminPass) {
     const trimmed = adminPass.trim();
+    if (trimmed.length < 8) {
+      throw new Error('Admin password must be at least 8 characters long');
+    }
     localStorage.setItem('confess_admin_pass', trimmed);
     if (supabase) {
-      try {
-        const { error } = await supabase.from('system_settings').upsert({ key: 'admin_password', value: trimmed });
-        if (error) {
-          if (error.code === '42P01') {
-            console.error('Supabase Error: "system_settings" table is missing. Password was NOT synced to the cloud. Run setup_supabase.sql.');
-          } else {
-            throw error;
-          }
-        }
-      } catch (e) {
-        console.error('Error saving admin password to Supabase:', e);
-      }
+      console.warn('SECURITY: Admin password stored locally only. For production, use Supabase Auth with proper password hashing.');
     }
   }
   if (modPass) {
     const trimmed = modPass.trim();
+    if (trimmed.length < 8) {
+      throw new Error('Moderator password must be at least 8 characters long');
+    }
     localStorage.setItem('confess_mod_pass', trimmed);
     if (supabase) {
-      try {
-        const { error } = await supabase.from('system_settings').upsert({ key: 'moderator_password', value: trimmed });
-        if (error) {
-          if (error.code === '42P01') {
-            console.error('Supabase Error: "system_settings" table is missing. Password was NOT synced to the cloud. Run setup_supabase.sql.');
-          } else {
-            throw error;
-          }
-        }
-      } catch (e) {
-        console.error('Error saving moderator password to Supabase:', e);
-      }
+      console.warn('SECURITY: Moderator password stored locally only. For production, use Supabase Auth with proper password hashing.');
     }
   }
 }
 
 // Fetch auto-hide report limit configuration
 export async function getReportThreshold() {
-  let limit = 5;
+  let limit = parseInt(localStorage.getItem('confess_report_threshold')) || 5;
+  if (isNaN(limit)) limit = 5;
+  
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -495,17 +611,16 @@ export async function getReportThreshold() {
         }
       } else if (data) {
         const val = parseInt(data.value);
-        if (!isNaN(val)) limit = val;
+        if (!isNaN(val)) {
+          limit = val;
+          localStorage.setItem('confess_report_threshold', limit.toString());
+        }
       }
     } catch (e) {
       console.error('Error fetching report threshold from Supabase:', e);
     }
   }
   
-  const localVal = parseInt(localStorage.getItem('confess_report_threshold'));
-  if (!isNaN(localVal)) {
-    return localVal;
-  }
   return limit;
 }
 
@@ -575,10 +690,19 @@ export function getSupabaseConfig() {
 }
 
 // Get or generate user's persistent chat session ID
+// SECURITY: Use crypto.randomUUID() for cryptographically secure session IDs
 export function getChatSessionId() {
   let sessId = localStorage.getItem('secret_confessions_chat_session_id');
   if (!sessId) {
-    sessId = 'chat_sess_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36);
+    // Use crypto.randomUUID() for secure random generation
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      sessId = 'chat_sess_' + crypto.randomUUID();
+    } else {
+      // Fallback for older browsers (shouldn't happen in modern browsers)
+      const array = new Uint32Array(4);
+      crypto.getRandomValues(array);
+      sessId = 'chat_sess_' + Array.from(array, n => n.toString(16).padStart(8, '0')).join('-');
+    }
     localStorage.setItem('secret_confessions_chat_session_id', sessId);
   }
   return sessId;
@@ -607,11 +731,59 @@ export async function getChatMessages(sessionId) {
 
 // Send a chat message
 export async function sendChatMessage(sessionId, messageText, sender, senderName) {
+  // SECURITY: Validate message
+  if (!messageText || typeof messageText !== 'string') {
+    throw new Error('Invalid message');
+  }
+  const trimmed = messageText.trim();
+  if (trimmed.length === 0) {
+    throw new Error('Message cannot be empty');
+  }
+  if (trimmed.length > 400) {
+    throw new Error('Message cannot exceed 400 characters');
+  }
+
+  // SECURITY: Check for suspicious patterns
+  const suspiciousPatterns = [
+    /<script/i,
+    /javascript:/i,
+    /on\w+\s*=/i,
+    /data:/i,
+    /vbscript:/i
+  ];
+  for (const pattern of suspiciousPatterns) {
+    if (pattern.test(trimmed)) {
+      throw new Error('Message contains invalid content');
+    }
+  }
+
+  // SECURITY: Validate sender
+  if (sender !== 'user' && sender !== 'staff') {
+    throw new Error('Invalid sender type');
+  }
+
+  // SECURITY: Validate sender name
+  if (!senderName || typeof senderName !== 'string' || senderName.trim().length === 0) {
+    throw new Error('Invalid sender name');
+  }
+  if (senderName.length > 50) {
+    throw new Error('Sender name too long');
+  }
+
+  // SECURITY: Rate limiting (only for user messages, not staff replies)
+  if (sender === 'user') {
+    const rateLimit = checkRateLimit('CHAT', RATE_LIMITS.CHAT);
+    if (!rateLimit.allowed) {
+      const waitSec = Math.ceil(rateLimit.waitMs / 1000);
+      throw new Error(`Rate limit exceeded. Please wait ${waitSec} seconds before sending another message.`);
+    }
+  }
+
   const messageData = {
     session_id: sessionId,
-    message: messageText.trim(),
-    sender: sender, // 'user' or 'staff'
-    sender_name: senderName,
+    message: trimmed,
+    sender: sender,
+    sender_name: senderName.trim(),
     timestamp: new Date().toISOString()
   };
 
